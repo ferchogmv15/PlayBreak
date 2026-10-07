@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PlayBreak</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: app con menú lateral + pantalla; la sala es un mapa de piso.
+   Color 60-30-10: 60 % crema (fondo y paneles) · 30 % arena y verde salvia (tarjetas, piso, estados) · 10 % café (acciones principales).
+   Espaciado: sistema base 8 (4 · 8 · 16 · 24 · 32 · 48). */
+:root{--bg:#F5EFE3;--panel:#FFFAF1;--ink:#3A2E25;--soft:#6E6052;--line:#E6D9C3;
+--sand:#EBDDC2;--sand-d:#D9C6A3;--floor:#D3E2C7;--floor2:#C6D8B8;--wood:#B98B64;
+--accent:#7A4E2D;--accent-d:#5C3820;--accent-t:#7A4E2D;--on-accent:#FFF8EC;
+--sun:#F2C66D;--sun-l:#FBEFD2;
+--ok-bg:#D4EEDC;--ok:#1E6B45;--bad-bg:#F7DCDC;--bad:#9A2F2F;--paper:#FFFFFF;--shadow:rgba(90,60,40,.22);
+--s1:4px;--s2:8px;--s3:16px;--s4:24px;--s5:32px;--s6:48px;
+--r1:8px;--r2:16px;--r3:24px;
+--display:Fredoka,Nunito,system-ui,sans-serif;--body:Nunito,system-ui,sans-serif;color-scheme:light}
+*,*:before,*:after{box-sizing:border-box}html,body{height:100%;margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:500 15px/1.5 var(--body)}
+h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;text-wrap:balance}
+h1{font-size:28px;line-height:1.15}h2{font-size:22px}h3{font-size:16px}
+p{margin:0}
+button,input{font:inherit;color:inherit}button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:208px 1fr;height:100%}
+nav{background:var(--panel);border-right:2px solid var(--line);padding:var(--s4) var(--s3);display:flex;flex-direction:column;gap:var(--s2)}
+.logo{display:flex;align-items:center;gap:var(--s2);font:600 24px var(--display);padding:0 var(--s2) var(--s3)}
+.logo i{width:32px;height:32px;border-radius:10px 10px 4px 4px;background:var(--sun);position:relative;flex:none}
+.logo i:after{content:"";position:absolute;left:12px;top:16px;width:8px;height:16px;background:var(--wood);border-radius:4px 4px 0 0}
+.logo.sm{font-size:17px;padding:0}.logo.sm i{width:24px;height:24px}.logo.sm i:after{left:8px;top:12px;width:8px;height:12px}
+.nb{border:0;background:none;text-align:left;padding:var(--s2) var(--s3);border-radius:var(--r2);font-weight:700;display:flex;gap:var(--s2);align-items:center}
+.nb:hover{background:var(--sand)}.nb.on{background:var(--accent);color:var(--on-accent)}
+.me{margin-top:auto;font-size:13px;color:var(--soft);background:var(--sun-l);border-radius:var(--r2);padding:var(--s3)}
+main{display:flex;flex-direction:column;min-width:0;height:100%}
+.proto{display:flex;gap:var(--s2);align-items:center;padding:var(--s2) var(--s4);font-size:13px;color:var(--soft);border-bottom:2px solid var(--line);overflow-x:auto;white-space:nowrap;flex:none}
+.proto .lbl{font-weight:800;letter-spacing:.03em;text-transform:uppercase;font-size:11px;margin-right:var(--s1)}
+.proto button{border:2px solid var(--line);background:var(--panel);border-radius:99px;padding:0 var(--s3);min-height:28px;font-size:13px;flex:none}
+.proto button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.proto .tools{margin-left:auto;display:flex;gap:var(--s2)}
+.proto .tools button{border-style:dashed}
+.showbar{position:fixed;left:var(--s3);bottom:calc(var(--s3) + env(safe-area-inset-bottom,0px));z-index:40;border:2px dashed var(--line);background:var(--panel);border-radius:99px;padding:var(--s1) var(--s3);font-size:13px;color:var(--soft)}
+.screen{display:none;flex:1;overflow:auto;padding:var(--s4) var(--s5)}.screen.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+body.bare .app{grid-template-columns:1fr}body.bare nav{display:none}
+.hd{display:flex;align-items:end;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s3);flex-wrap:wrap}
+.hd>div:first-child{min-width:0}
+.hd p{margin-top:var(--s1);color:var(--soft)}
+.hd .acts{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:var(--s2);border-radius:99px;padding:var(--s1) var(--s3);font-size:13px;font-weight:700;background:var(--sand)}
+.chip.live{background:var(--ok-bg);color:var(--ok)}.chip.async{background:var(--sun-l);color:var(--ink)}
+.chip.live:before{content:"";width:8px;height:8px;border-radius:50%;background:#2FB26B}
+/* jerarquía de acciones: primaria (café) · secundaria (arena) · terciaria (contorno) */
+.btn{border:0;border-radius:99px;padding:var(--s2) var(--s4);min-height:40px;font-weight:700;background:var(--accent);color:var(--on-accent);box-shadow:0 3px 0 var(--accent-d)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--accent-d)}
+.btn.light{background:var(--sand);color:var(--ink);box-shadow:0 3px 0 var(--sand-d)}
+.btn.alt{background:var(--panel);color:var(--ink);box-shadow:0 3px 0 var(--line);border:2px solid var(--line)}
+.btn.sm{padding:var(--s1) var(--s3);min-height:32px;font-size:14px}
+.soft{color:var(--soft);font-size:13px}
+.opts{display:flex;gap:var(--s2);justify-content:center;flex-wrap:wrap;margin-top:var(--s3)}.opts.left{justify-content:flex-start}
+/* avatares */
+.av{width:34px;height:34px;border-radius:50% 50% 45% 45%;background:var(--c);border:3px solid #fff;position:relative;flex:none;box-shadow:0 2px 0 rgba(0,0,0,.15)}
+.av:before,.av:after{content:"";position:absolute;top:12px;width:4px;height:5px;border-radius:50%;background:#3A2E25}
+.av:before{left:7px}.av:after{right:7px}
+.av.lg{width:64px;height:64px}.av.lg:before,.av.lg:after{top:24px;width:7px;height:9px}.av.lg:before{left:14px}.av.lg:after{right:14px}
+.av.ghost{opacity:.45;filter:grayscale(.6)}
+.av b{position:absolute;left:50%;transform:translateX(-50%);bottom:-22px;font:700 11px var(--body);background:var(--panel);color:var(--ink);border-radius:var(--r1);padding:0 var(--s1);white-space:nowrap}
+.av .acc{position:absolute;left:50%;top:-16px;transform:translateX(-50%);font-size:18px}
+.av.lg .acc{top:-24px;font-size:28px}
+/* aviso */
+.avisowrap{position:relative;max-width:864px;margin:var(--s4) auto 0}
+.scenario{margin-bottom:var(--s3)}
+.work{background:var(--panel);border:2px solid var(--line);border-radius:var(--r2);overflow:hidden}
+.workbar{display:flex;gap:var(--s3);align-items:center;padding:var(--s3);border-bottom:2px solid var(--line);background:var(--bg)}
+.workbar span{color:var(--soft)}
+.workmsgs{padding:var(--s3);display:flex;flex-direction:column;gap:var(--s3);min-height:304px}
+.wm small{color:var(--soft);margin-left:var(--s2)}
+.toast-card{position:absolute;right:calc(-1 * var(--s3));bottom:calc(-1 * var(--s5));width:min(360px,100%);background:var(--panel);border:2px solid var(--line);border-radius:var(--r3);padding:var(--s4);box-shadow:0 8px 0 var(--line);display:flex;flex-direction:column;gap:var(--s2);animation:pop .4s ease}
+.toast-card .opts{margin-top:var(--s1)}
+@keyframes pop{from{transform:translateY(16px)}to{transform:none}}
+/* bienvenida */
+.welcome{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:var(--s3);padding-block:var(--s3)}
+.welcome .logo{padding:0}
+.lead{font-size:17px;color:var(--soft);max-width:60ch}
+/* mapa */
+.world{position:relative;height:544px;border-radius:var(--r3);border:var(--s2) solid var(--wood);overflow:hidden;background:repeating-conic-gradient(var(--floor) 0 25%,var(--floor2) 0 50%) 0 0/48px 48px}
+.rug{position:absolute;left:36%;top:34%;width:28%;height:34%;border-radius:50%;background:var(--sun-l);border:4px dashed var(--sun);opacity:.9}
+.rm{position:absolute;border:0;border-radius:var(--r3);padding:var(--s3);text-align:left;background:var(--panel);box-shadow:0 4px 0 var(--shadow);transition:transform .15s}
+.rm:hover{transform:translateY(-4px) rotate(-.5deg)}.rm h3{font-size:17px}.rm small{display:block;color:var(--soft);font-weight:700}
+.rm .ppl{display:flex;margin-top:var(--s2);min-height:34px}.rm .ppl .av{margin-right:-6px}
+.rm .art{height:48px;border-radius:var(--r2);margin-bottom:var(--s2);display:flex;align-items:center;justify-content:center;font-size:26px}
+.plant{position:absolute;font-size:32px}
+.you{position:absolute;left:47%;top:46%;transition:all .8s ease;z-index:5}
+.you:after{content:"";position:absolute;inset:-9px;border:3px dotted var(--accent);border-radius:50%}
+.hint{position:absolute;left:50%;bottom:var(--s3);transform:translateX(-50%);background:var(--panel);border-radius:99px;padding:var(--s1) var(--s3);font-weight:700;font-size:14px;box-shadow:0 3px 0 var(--shadow);white-space:nowrap}
+/* salas */
+.rwrap{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:var(--s4)}
+.stage{background:var(--panel);border:2px solid var(--line);border-radius:var(--r3);padding:var(--s3);min-width:0}
+.table{background:var(--floor);border-radius:var(--r3);padding:var(--s3) var(--s3) var(--s5);display:flex;gap:var(--s4);justify-content:center;flex-wrap:wrap}
+.board{background:var(--paper);border-radius:var(--r2);border:4px solid var(--wood);margin:calc(-1 * var(--s2)) auto 0;display:block;width:100%;max-width:560px;height:auto}
+.side{display:flex;flex-direction:column;gap:var(--s3);min-width:0}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:var(--r3);padding:var(--s3)}
+.card h3{margin-bottom:var(--s2)}
+.card.sunny{background:var(--sun-l)}
+.react{display:flex;gap:var(--s2);flex-wrap:wrap}.react button{border:2px solid var(--line);background:var(--bg);border-radius:var(--r2);padding:var(--s1) var(--s2);font-size:18px}
+.bubble{background:var(--bg);border-radius:var(--r2) var(--r2) var(--r2) 4px;padding:var(--s1) var(--s2);margin:var(--s1) 0;font-size:14px}.bubble b{color:var(--accent-t)}
+.bubble.mine{background:var(--sand);border-radius:var(--r2) var(--r2) 4px var(--r2);margin-left:var(--s4)}
+.bubble.sys{background:none;border:2px dashed var(--line);text-align:center;color:var(--soft)}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.tog h3{margin:0}
+.sw{width:48px;height:24px;border-radius:99px;background:var(--line);border:0;position:relative;flex:none}
+.sw:after{content:"";position:absolute;left:4px;top:4px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}
+.sw[aria-pressed=true]{background:#5FB48E}.sw[aria-pressed=true]:after{left:28px}
+.row-in{display:flex;gap:var(--s2);margin-top:var(--s3);flex-wrap:wrap}
+.row-in input{flex:1 1 200px;min-width:0;border:2px solid var(--line);border-radius:99px;padding:var(--s2) var(--s3);min-height:40px;background:var(--bg)}
+.msg{margin-top:var(--s2);min-height:24px;font-weight:700}
+.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.turn{display:flex;gap:var(--s3);align-items:center;padding:var(--s2);border-radius:var(--r2);background:var(--bg);margin-bottom:var(--s2)}
+.turn .w{width:96px;height:64px;border-radius:var(--r1);background:var(--paper);border:3px solid var(--wood);flex:none;display:grid;place-items:center;font:600 18px var(--display);color:#3A2E25}
+.turn small{color:var(--soft)}
+.turn.new{outline:3px solid var(--accent);outline-offset:-3px}
+.empty{border:3px dashed var(--accent);border-radius:var(--r3);padding:var(--s4);text-align:center;background:var(--sand)}
+.empty .opts{margin-top:var(--s3)}
+.piece{font-size:40px;display:inline-block;margin:var(--s2) 0;animation:bob 2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-4px)}}
+/* trivia */
+.qcard{margin-top:var(--s3);display:flex;flex-direction:column;gap:var(--s3)}
+.qnum{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--soft)}
+.ans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+.ans button{border:2px solid var(--line);background:var(--bg);border-radius:var(--r2);padding:var(--s3);text-align:left;font-weight:700;display:flex;flex-direction:column;gap:var(--s1)}
+.ans button:hover:not(:disabled){border-color:var(--accent)}
+.ans button:disabled{cursor:default}
+.ans button.right{background:var(--ok-bg);border-color:#5FB48E;color:var(--ok)}
+.ans button.wrong{background:var(--bad-bg);border-color:#E08A8A;color:var(--bad)}
+.who{display:flex;gap:var(--s1);flex-wrap:wrap;min-height:20px}.who em{font-style:normal;font-size:12px;background:var(--panel);color:var(--ink);border-radius:var(--r1);padding:0 var(--s1)}
+/* puzzle */
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s2);max-width:336px;margin:var(--s3) auto var(--s2);padding:var(--s2);border-radius:var(--r2);background:var(--wood)}
+.slot{aspect-ratio:1;border-radius:var(--r1);border:0;display:grid;place-items:center;font-size:40px;position:relative;max-width:100%}
+.slot.sky{background:#BFE3F6}.slot.grass{background:#A9D69A}
+.slot small{position:absolute;bottom:var(--s1);left:0;right:0;text-align:center;font:700 10px var(--body);color:#3A2E25}
+.slot.hole{background:repeating-linear-gradient(45deg,var(--panel) 0 8px,var(--bg) 8px 16px);border:3px dashed var(--accent)}
+.slot.hole:hover{background:var(--sand)}
+.slot.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.slot.mine{outline:4px solid var(--sun);outline-offset:-4px}
+/* fin */
+.veil{min-height:100%;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,var(--sun-l),transparent 65%)}
+.pop{background:var(--panel);border:2px solid var(--line);border-radius:var(--r3);padding:var(--s5) var(--s6);max-width:544px;width:100%;text-align:center;box-shadow:0 8px 0 var(--line)}
+.pop .row{display:flex;justify-content:center;gap:var(--s4);margin:var(--s4) 0 var(--s5);flex-wrap:wrap}
+.common{background:var(--sun-l);border-radius:var(--r2);padding:var(--s2) var(--s3);margin:0 0 var(--s4);font-weight:700}
+/* charla */
+.icebreak{background:var(--sun-l);border-radius:var(--r3);padding:var(--s3);display:flex;flex-direction:column;gap:var(--s2)}
+.icebreak .q{font:600 20px/1.3 var(--display)}
+.icebreak .opts{margin-top:0}
+.chat{margin-top:var(--s3);display:flex;flex-direction:column;max-height:304px;overflow:auto}
+.timer{font-variant-numeric:tabular-nums}
+/* listas */
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);max-width:1000px;align-items:start}
+.li{display:flex;gap:var(--s3);align-items:center;padding:var(--s2) 0;border-top:2px solid var(--line)}
+.li:first-of-type{border-top:0}
+.li>div{flex:1;min-width:0}.li small{display:block;color:var(--soft)}
+.done{color:var(--ok);font-weight:800}
+/* perfil */
+.pgrid{display:grid;grid-template-columns:264px minmax(0,1fr);gap:var(--s4);max-width:984px}
+.tags{display:flex;gap:var(--s2);flex-wrap:wrap}
+.tag{border:2px solid var(--line);background:var(--bg);border-radius:99px;padding:var(--s1) var(--s3);font-weight:700}
+.tag[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.opt{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3);border:2px solid var(--line);border-radius:var(--r2);margin-bottom:var(--s2);cursor:pointer}
+.opt:has(input:checked){border-color:var(--accent);background:var(--sand)}.opt input{margin-top:var(--s1);accent-color:var(--accent)}
+.opt small{display:block;color:var(--soft)}
+.sw-c{display:flex;gap:var(--s2);justify-content:center;margin-top:var(--s3);flex-wrap:wrap}.sw-c button{width:24px;height:24px;border-radius:50%;border:3px solid #fff;background:var(--c);box-shadow:0 0 0 2px var(--line)}
+.sw-c button[aria-pressed=true]{box-shadow:0 0 0 3px var(--accent)}
+.react button[aria-pressed=true]{border-color:var(--accent);background:var(--sand)}
+.sec{margin-bottom:var(--s4)}.sec h3{margin-bottom:var(--s2)}
+.welcome .sec{margin-bottom:0}
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--s4) + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:var(--s2) var(--s3);border-radius:var(--r2);font-weight:700;max-width:calc(100% - 32px);box-shadow:0 6px 18px rgba(0,0,0,.2);z-index:50}
+@media (max-width:900px){.rwrap,.pgrid,.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+ .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+ body.bare .app{grid-template-rows:1fr}
+ nav{flex-direction:row;align-items:center;border-right:0;border-bottom:2px solid var(--line);padding:var(--s2) var(--s3);gap:var(--s1);overflow-x:auto}
+ .logo{padding:0 var(--s2) 0 0;font-size:20px}.me{display:none}.nb{padding:var(--s2);white-space:nowrap}
+ .proto{padding:var(--s2) var(--s3)}
+ .screen{padding:var(--s3)}
+ h1{font-size:24px}
+ .world{height:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);padding:var(--s3)}
+ .rm{position:static;width:auto!important}
+ .rug,.plant,.you{display:none}
+ .hint{position:static;transform:none;grid-column:1/-1;white-space:normal;text-align:center}
+ .toast-card{position:static;width:100%;margin-top:var(--s3)}
+ .avisowrap{margin-top:var(--s2)}
+ .table{gap:var(--s3)}
+ .ans{grid-template-columns:minmax(0,1fr)}
+ .pop{padding:var(--s4) var(--s3)}
+}
+@media (max-width:420px){.world{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<nav aria-label="Principal">
+ <div class="logo"><i></i>PlayBreak</div>
+ <button class="nb" data-go="mapa">🗺️ Sala</button>
+ <button class="nb" data-go="turnos">🛋️ Mis turnos</button>
+ <button class="nb" data-go="perfil">🙂 Tu rincón</button>
+ <div class="me">Aquí nada es obligatorio. Entra cuando quieras, sal cuando quieras.</div>
+</nav>
+<main>
+ <div class="proto" id="proto"><span class="lbl">Pantallas del prototipo</span></div>
+
+ <!-- 1 · Sala principal -->
+ <section class="screen" id="mapa">
+  <div class="hd"><div><h1>La sala de descanso</h1><p>Entra a una sala. Hay 5 personas jugando ahora y otras dejaron jugadas pendientes.</p></div><span class="chip">Martes, 2:40 p. m.</span></div>
+  <div class="world">
+   <div class="rug"></div>
+   <span class="plant" style="left:2%;top:6%">🪴</span><span class="plant" style="right:3%;bottom:6%">🌿</span>
+   <button class="rm" style="left:4%;top:12%;width:208px" data-act="inactiva"><div class="art" style="background:#8CC6E8">🧠</div><h3>Rincón de trivia</h3><small>En vivo · 2 jugando</small><div class="ppl" data-av="#F28B82,#8CC6E8"></div></button>
+   <button class="rm" style="right:4%;top:8%;width:232px" data-go="dibujo"><div class="art" style="background:#F6C85F">🎨</div><h3>Mesa de dibujo</h3><small>En vivo · 3 aquí</small><div class="ppl" data-av="#B79CE0,#7CC4A4,#F6C85F"></div></button>
+   <button class="rm" style="left:6%;bottom:9%;width:208px" data-act="inactiva"><div class="art" style="background:#7CC4A4">🧩</div><h3>Rincón del puzzle</h3><small>Por turnos · 2 jugadas esperando</small><div class="ppl" data-av="#EE8E8E:g,#8CC6E8:g"></div></button>
+   <button class="rm" style="right:5%;bottom:11%;width:224px" data-go="turnos"><div class="art" style="background:#EBDDC2">🔤</div><h3>Rincón de palabras</h3><small id="st-palabras">Por turnos · es tu turno, sin prisa</small><div class="ppl" data-av="#F6C85F:g"></div></button>
+   <div class="av you" style="--c:#C98B5B"><b>Tú</b></div>
+   <div class="hint">Toca una sala para entrar. Los avatares claros estuvieron aquí antes.</div>
+  </div>
+ </section>
+
+ <!-- 2 · Partida en curso -->
+ <section class="screen" id="dibujo">
+  <div class="hd"><div><h1>🎨 Mesa de dibujo</h1><p>Sara está dibujando. Adivina qué es o solo mira.</p></div><div class="acts"><span class="chip live">En vivo · 3 aquí</span><button class="btn alt" data-go="mapa">Volver a la sala</button></div></div>
+  <div class="rwrap"><div class="stage">
+   <div class="table"><div class="av lg" style="--c:#B79CE0"><b>Sara ✏️</b></div><div class="av lg" style="--c:#7CC4A4"><b>Tomás</b></div><div class="av lg" style="--c:#F6C85F"><b>Lucía</b></div><div class="av lg you-av" style="--c:#C98B5B"><b>Tú</b></div></div>
+   <svg class="board" viewBox="0 0 560 300" role="img" aria-label="Dibujo de Sara"><rect width="560" height="300" fill="#fff"/><path d="M120 230 Q280 250 440 230" stroke="#7CC4A4" stroke-width="10" fill="none" stroke-linecap="round"/><circle cx="280" cy="150" r="62" fill="#F6C85F" stroke="#3B2F3F" stroke-width="5"/><path d="M280 62v-30M280 268v30M192 150h-30M368 150h30M218 88l-20-20M342 88l20-20" stroke="#EE8E8E" stroke-width="8" stroke-linecap="round"/><path d="M255 140q8 -10 16 0M290 140q8 -10 16 0M255 170q25 22 50 0" stroke="#3B2F3F" stroke-width="5" fill="none" stroke-linecap="round"/></svg>
+   <form class="row-in" id="d-form"><input id="d-guess" aria-label="Tu respuesta" placeholder="Escribe qué crees que es (opcional)" autocomplete="off"><button class="btn">Adivinar</button><button type="button" class="btn alt" data-act="d-pasar">Pasar</button></form>
+   <p class="msg ok" id="d-msg" aria-live="polite"></p>
+  </div>
+  <div class="side">
+   <div class="card"><div class="tog"><h3>Voz</h3><button class="sw" data-act="toggle" aria-pressed="false" aria-label="Chat de voz"></button></div><p class="soft">Apagada. Nadie te va a pedir que la enciendas.</p></div>
+   <div class="card"><h3>Reacciones</h3><div class="bubble"><b>Tomás</b> ¿un sol? ¿un huevo feliz?</div><div class="bubble"><b>Lucía</b> me encanta la línea verde</div><div class="react" style="margin-top:8px"><button data-act="toggle" aria-pressed="false">😄</button><button data-act="toggle" aria-pressed="false">👏</button><button data-act="toggle" aria-pressed="false">🤔</button><button data-act="toggle" aria-pressed="false">💛</button></div></div>
+   <div class="card sunny" id="d-round"></div>
+  </div></div>
+ </section>
+
+ <!-- 3 · Turno asíncrono -->
+ <section class="screen" id="turnos">
+  <div class="hd"><div><h1>🔤 Rincón de palabras</h1><p>Ahora no hay nadie. Está bien: tu turno te espera.</p></div><div class="acts"><span class="chip async">Por turnos · deja tu jugada</span><button class="btn alt" data-go="mapa">Volver a la sala</button></div></div>
+  <div class="rwrap"><div class="stage">
+   <div class="table"><div class="av lg ghost" style="--c:#F6C85F"><b>Lucía · lunes</b></div><div class="av lg ghost" style="--c:#7CC4A4"><b>Tomás · ayer</b></div><div class="av lg ghost" style="--c:#F6C85F"><b>Mateo · hace 1 h</b></div></div>
+   <h3 style="margin:16px 0 4px">Últimos turnos</h3>
+   <p class="soft" style="margin-bottom:8px">Cadena del día: cosas que alegran un lunes. Cada palabra empieza con la última letra de la anterior.</p>
+   <div id="w-chain">
+    <div class="turn"><div class="w">café</div><div><p><b>Lucía</b> empezó con «café»</p><small>Lunes</small></div></div>
+    <div class="turn"><div class="w">empanada</div><div><p><b>Tomás</b> siguió con «empanada»</p><small>Ayer</small></div></div>
+    <div class="turn"><div class="w">arepa</div><div><p><b>Mateo</b> 🌱 dejó «arepa»</p><small>Hace 1 hora · es nuevo en el equipo</small></div></div>
+   </div>
+   <form class="row-in" id="w-form"><input id="w-word" aria-label="Tu palabra" placeholder="Una palabra que empiece con «a»" autocomplete="off"><button class="btn">Dejar mi jugada</button></form>
+  </div>
+  <div class="side">
+   <div class="empty" id="w-side"><h3>Tu jugada, cuando quieras</h3><p style="margin-top:8px">Escribe una palabra y listo. Los demás la verán cuando entren.</p></div>
+   <div class="card"><div class="tog"><h3>¿Prefieres compañía?</h3><button class="sw" data-act="toggle" aria-pressed="false" aria-label="Avisarme si llega gente"></button></div><p class="soft">Te avisamos solo si entran dos o más personas. Si no, nada.</p></div>
+  </div></div>
+ </section>
+
+ <!-- 4 · Momento post partida -->
+ <section class="screen" id="fin"><div class="veil"><div class="pop">
+  <h1>¡Buena partida!</h1><p class="soft" style="font-size:15px;margin-top:4px">Tú, Sara y Tomás adivinaron tres dibujos juntos.</p>
+  <div class="row"><div class="av lg you-av" style="--c:#C98B5B"><b>Tú</b></div><div class="av lg" style="--c:#B79CE0"><b>Sara</b></div><div class="av lg" style="--c:#7CC4A4"><b>Tomás</b></div></div>
+  <p class="common">A Tomás también le gusta el cine 🎬</p>
+  <h2>¿Se quedan 2 minutos más?</h2>
+  <div class="opts"><button class="btn" data-act="charlar">Seguir charlando</button><button class="btn light" data-go="dibujo">Jugar otra vez</button><button class="btn alt" data-go="mapa">Salir sin avisar</button></div>
+  <p class="soft" style="margin-top:16px">Salir siempre está bien. Nadie recibe un aviso cuando te vas.</p>
+ </div></div></section>
+
+ <!-- 5 · Perfil -->
+ <section class="screen" id="perfil">
+  <div class="hd"><div><h1>Tu rincón</h1><p>Pistas para que las salas se sientan tuyas. Cambia lo que quieras, cuando quieras.</p></div><button class="btn" data-act="guardar-perfil">Guardar</button></div>
+  <div class="pgrid">
+   <div class="card" style="text-align:center"><div class="av lg you-av" id="pav" style="--c:#C98B5B;width:112px;height:112px;margin:24px auto 8px"></div><h3>Tu avatar</h3><div class="sw-c" id="cols"></div></div>
+   <div>
+    <div class="sec card"><h3>Lo que te gusta</h3><div class="tags" data-tags="Cine:1,Series:1,Videojuegos:1,Música:1,Senderismo,Plantas,Cocina,Juegos de mesa,Lectura,Fútbol"></div><p class="soft" style="margin-top:8px">Lo usamos para acercarte, sin forzar, a salas con intereses en común.</p></div>
+    <div class="sec card"><h3>Juegos que te gustan</h3><div class="tags" data-tags="Trivia:1,Dibujar y adivinar:1,Palabras,Rompecabezas en equipo:1"></div></div>
+    <div class="sec card"><h3>Cómo te gusta jugar</h3>
+     <label class="opt" for="m1"><input type="radio" id="m1" name="modo"><span><b>Con voz</b><small>Charlar en voz alta mientras juegas.</small></span></label>
+     <label class="opt" for="m2"><input type="radio" id="m2" name="modo" checked><span><b>Solo texto</b><small>Reacciones y mensajes cortos, sin micrófono.</small></span></label>
+     <label class="opt" for="m3"><input type="radio" id="m3" name="modo"><span><b>Solo por turnos</b><small>Dejas jugadas y nunca te meten en una sala en vivo.</small></span></label>
+    </div>
+   </div></div>
+ </section>
+</main></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const SCREENS=[["mapa","1 Sala"],["dibujo","2 Partida en curso"],["turnos","3 Turno asíncrono"],["fin","4 Post partida"],["perfil","5 Tu rincón"]];
+const NAV={mapa:"mapa",dibujo:"mapa",fin:"mapa",turnos:"turnos",perfil:"perfil"};
+let toastT;function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3000)}
+
+/* barra del prototipo */
+$("#proto").insertAdjacentHTML("beforeend",SCREENS.map(([k,l])=>`<button data-go="${k}" data-p="1">${l}</button>`).join("")+`<div class="tools"><button data-act="ocultar">Ocultar barra</button><button data-act="reiniciar">↺ Reiniciar</button></div>`);
+document.body.insertAdjacentHTML("beforeend",`<button class="showbar" id="showbar" data-act="mostrar" hidden>Mostrar pantallas</button>`);
+
+function go(k,modo){if(!SCREENS.some(s=>s[0]===k))k="mapa";
+ $$(".screen").forEach(e=>e.classList.toggle("on",e.id===k));
+ $$("[data-p]").forEach(b=>b.classList.toggle("on",b.dataset.go===k));
+ $$(".nb").forEach(b=>b.classList.toggle("on",b.dataset.go===NAV[k]));
+ $("#"+k).scrollTop=0;
+ if(k==="dibujo")modo==="charla"?charla():resetDibujo();
+ try{history.replaceState(null,"","#"+k)}catch(e){}}
+document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g){go(g.dataset.go);return}
+ const a=e.target.closest("[data-act]");if(a)act(a.dataset.act,a)});
+
+/* avatares y etiquetas */
+$$("[data-av]").forEach(el=>el.innerHTML=el.dataset.av.split(",").map(p=>{const[c,g]=p.split(":");return `<div class="av${g?" ghost":""}" style="--c:${c}"></div>`}).join(""));
+$$("[data-tags]").forEach(el=>el.innerHTML=el.dataset.tags.split(",").map(t=>{const[n,on]=t.split(":");return `<button class="tag" data-act="toggle" aria-pressed="${!!on}">${n}</button>`}).join(""));
+$("#cols").innerHTML=["#C98B5B","#F28B82","#8CC6E8","#7CC4A4","#F6C85F","#B79CE0"].map((c,i)=>`<button style="--c:${c}" data-act="color" data-c="${c}" aria-label="Color ${i+1}" aria-pressed="${i===0}"></button>`).join("");
+
+/* 2 · Partida en curso: cualquier respuesta lleva al resultado */
+function resetDibujo(){$("#d-form").hidden=false;$("#d-guess").value="";$("#d-msg").textContent="";
+ $("#d-round").innerHTML=`<h3>Ronda 3 de 3</h3><p>Quedan unos 3 minutos. Sal cuando quieras; la sala sigue.</p>`}
+function revelar(acerto){$("#d-form").hidden=true;$("#d-msg").textContent=acerto?"¡Correcto! Era un sol saliendo sobre el pasto. 🎉":"Era un sol saliendo sobre el pasto. ¡En la próxima!";
+ $("#d-round").innerHTML=`<h3>Partida terminada</h3><p style="margin-bottom:16px">Adivinaron tres dibujos entre todos.</p><button class="btn" data-go="fin">Ver resultado</button>`}
+function charla(){$("#d-form").hidden=true;$("#d-msg").textContent="Partida terminada. Se quedan charlando unos minutos.";
+ $("#d-round").innerHTML=`<h3>Charla libre · 2 minutos</h3><p style="margin-bottom:16px">Usa las reacciones o activa la voz. Puedes irte cuando quieras.</p><button class="btn alt" data-go="mapa">Volver a la sala</button>`}
+$("#d-form").onsubmit=e=>{e.preventDefault();revelar(true)};
+
+/* 3 · Turno asíncrono */
+$("#w-form").onsubmit=e=>{e.preventDefault();const w=($("#w-word").value.trim()||"aguacate").toLowerCase().replace(/</g,"");
+ $("#w-chain").insertAdjacentHTML("beforeend",`<div class="turn new"><div class="w">${w}</div><div><p><b>Tú</b> seguiste con «${w}»</p><small>Ahora</small></div></div>`);
+ $("#w-form").hidden=true;$("#st-palabras").textContent="Por turnos · ya jugaste ✓";
+ $("#w-side").innerHTML=`<h3>¡Listo! Tu jugada quedó guardada</h3><p style="margin-top:8px">Los demás la verán cuando entren. No necesitas esperar a nadie.</p><div class="opts"><button class="btn" data-go="mapa">Volver a la sala</button></div>`};
+
+function act(k,b){switch(k){
+ case "toggle":b.setAttribute("aria-pressed",b.getAttribute("aria-pressed")!=="true");break;
+ case "inactiva":toast("En este prototipo están activas la Mesa de dibujo y el Rincón de palabras.");break;
+ case "d-pasar":revelar(false);break;
+ case "charlar":go("dibujo","charla");break;
+ case "color":$$(".you-av,.you").forEach(a=>a.style.setProperty("--c",b.dataset.c));$$("#cols button").forEach(x=>x.setAttribute("aria-pressed",x===b));break;
+ case "guardar-perfil":toast("Cambios guardados.");break;
+ case "ocultar":$("#proto").hidden=true;$("#showbar").hidden=false;break;
+ case "mostrar":$("#proto").hidden=false;$("#showbar").hidden=true;break;
+ case "reiniciar":location.hash="mapa";location.reload();break;
+}}
+let h0=(location.hash||"").slice(1);if(h0.endsWith("-captura")){h0=h0.slice(0,-8);$("#proto").hidden=true}
+go(h0||"mapa");
+</script>
+
+</body>
+</html>
